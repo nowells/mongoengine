@@ -20,10 +20,10 @@ class BaseField(object):
     may be added to subclasses of `Document` to define a document's schema.
     """
 
-    # Fields may have _types inserted into indexes by default 
+    # Fields may have _types inserted into indexes by default
     _index_with_types = True
-    
-    def __init__(self, db_field=None, name=None, required=False, default=None, 
+
+    def __init__(self, db_field=None, name=None, required=False, default=None,
                  unique=False, unique_with=None, primary_key=False, validation=None,
                  choices=None):
         self.db_field = (db_field or name) if not primary_key else '_id'
@@ -41,7 +41,7 @@ class BaseField(object):
         self.choices = choices
 
     def __get__(self, instance, owner):
-        """Descriptor for retrieving a value from a field in a document. Do 
+        """Descriptor for retrieving a value from a field in a document. Do
         any necessary conversion between Python and MongoDB types.
         """
         if instance is None:
@@ -87,7 +87,7 @@ class BaseField(object):
         if self.choices is not None:
             if value not in self.choices:
                 raise ValidationError("Value must be one of %s."%unicode(self.choices))
-        
+
         # check validation argument
         if self.validation is not None:
             if callable(self.validation):
@@ -95,13 +95,13 @@ class BaseField(object):
                     raise ValidationError('Value does not match custom validation method.')
             else:
                 raise ValueError('validation argument must be a callable.')
-    
+
         self.validate(value)
 
 class ObjectIdField(BaseField):
     """An field wrapper around MongoDB's ObjectIds.
     """
-    
+
     def to_python(self, value):
         return value
         # return unicode(value)
@@ -147,10 +147,10 @@ class DocumentMetaclass(type):
                 # Get superclasses from superclass
                 superclasses[base._class_name] = base
                 superclasses.update(base._superclasses)
-                
+
             if hasattr(base, '_meta'):
-                # Ensure that the Document class may be subclassed - 
-                # inheritance may be disabled to remove dependency on 
+                # Ensure that the Document class may be subclassed -
+                # inheritance may be disabled to remove dependency on
                 # additional fields _cls and _types
                 if base._meta.get('allow_inheritance', True) == False:
                     raise ValueError('Document %s may not be subclassed' %
@@ -188,20 +188,20 @@ class DocumentMetaclass(type):
             field.owner_document = new_class
 
         module = attrs.get('__module__')
-        
-        base_excs = tuple(base.DoesNotExist for base in bases 
+
+        base_excs = tuple(base.DoesNotExist for base in bases
                           if hasattr(base, 'DoesNotExist')) or (DoesNotExist,)
         exc = subclass_exception('DoesNotExist', base_excs, module)
         new_class.add_to_class('DoesNotExist', exc)
-        
-        base_excs = tuple(base.MultipleObjectsReturned for base in bases 
+
+        base_excs = tuple(base.MultipleObjectsReturned for base in bases
                           if hasattr(base, 'MultipleObjectsReturned'))
         base_excs = base_excs or (MultipleObjectsReturned,)
         exc = subclass_exception('MultipleObjectsReturned', base_excs, module)
         new_class.add_to_class('MultipleObjectsReturned', exc)
-    
+
         return new_class
-        
+
     def add_to_class(self, name, value):
         setattr(self, name, value)
 
@@ -215,16 +215,16 @@ class TopLevelDocumentMetaclass(DocumentMetaclass):
         global _document_registry
 
         super_new = super(TopLevelDocumentMetaclass, cls).__new__
-        # Classes defined in this package are abstract and should not have 
+        # Classes defined in this package are abstract and should not have
         # their own metadata with DB collection, etc.
-        # __metaclass__ is only set on the class with the __metaclass__ 
+        # __metaclass__ is only set on the class with the __metaclass__
         # attribute (i.e. it is not set on subclasses). This differentiates
         # 'real' documents from the 'Document' class
         if attrs.get('__metaclass__') == TopLevelDocumentMetaclass:
             return super_new(cls, name, bases, attrs)
 
         collection = name.lower()
-        
+
         id_field = None
         base_indexes = []
 
@@ -236,7 +236,7 @@ class TopLevelDocumentMetaclass(DocumentMetaclass):
                 id_field = id_field or base._meta.get('id_field')
                 base_indexes += base._meta.get('indexes', [])
 
-        meta = {
+        default_meta = {
             'collection': collection,
             'max_documents': None,
             'max_size': None,
@@ -244,20 +244,23 @@ class TopLevelDocumentMetaclass(DocumentMetaclass):
             'indexes': [], # indexes to be ensured at runtime
             'id_field': id_field,
         }
+        meta = attrs.get('_meta', {})
+        for key, value in default_meta.items():
+            if key not in meta:
+                meta[key] = value
 
-        # Apply document-defined meta options
-        meta.update(attrs.get('meta', {}))
         attrs['_meta'] = meta
 
         # Set up collection manager, needs the class to have fields so use
         # DocumentMetaclass before instantiating CollectionManager object
         new_class = super_new(cls, name, bases, attrs)
         new_class.objects = QuerySetManager()
+        new_class._default_manager = QuerySetManager()
 
         user_indexes = [QuerySet._build_index_spec(new_class, spec)
                         for spec in meta['indexes']] + base_indexes
         new_class._meta['indexes'] = user_indexes
-        
+
         unique_indexes = []
         for field_name, field in new_class._fields.items():
             # Generate a list of indexes needed by uniqueness constraints
@@ -304,6 +307,10 @@ class TopLevelDocumentMetaclass(DocumentMetaclass):
             new_class._fields['id'] = ObjectIdField(db_field='_id')
             new_class.id = new_class._fields['id']
 
+        class Dummy(object):
+            name = new_class._meta['id_field']
+        new_class.pk = Dummy()
+
         _document_registry[name] = new_class
 
         return new_class
@@ -327,7 +334,7 @@ class BaseDocument(object):
         are present.
         """
         # Get a list of tuples of field names and their current values
-        fields = [(field, getattr(self, name)) 
+        fields = [(field, getattr(self, name))
                   for name, field in self._fields.items()]
 
         # Ensure that each field is matched to a valid value
@@ -413,7 +420,7 @@ class BaseDocument(object):
             data['_cls'] = self._class_name
             data['_types'] = self._superclasses.keys() + [self._class_name]
         return data
-    
+
     @classmethod
     def _from_son(cls, son):
         """Create an instance of a Document (subclass) from a PyMongo SON.
@@ -448,7 +455,7 @@ class BaseDocument(object):
         obj = cls(**data)
         obj._present_fields = present_fields
         return obj
-    
+
     def __eq__(self, other):
         if isinstance(other, self.__class__) and hasattr(other, 'id'):
             if self.id == other.id:

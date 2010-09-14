@@ -136,7 +136,7 @@ class Q(object):
 
         # Perform the substitution
         operation_js = op_js % {
-            'field': key, 
+            'field': key,
             'value': value_name
         }
         return value, operation_js
@@ -154,7 +154,7 @@ class QuerySet(object):
         self._where_clause = None
         self._loaded_fields = []
         self._ordering = []
-        
+
         # If inheritance is allowed, only return instances and instances of
         # subclasses of the class being used
         if document._meta.get('allow_inheritance'):
@@ -230,6 +230,9 @@ class QuerySet(object):
         """
         return self.__call__(*q_objs, **query)
 
+    def all(self):
+        return self.filter()
+
     @property
     def _collection(self):
         """Property that returns the collection object. This allows us to
@@ -237,7 +240,7 @@ class QuerySet(object):
         """
         if not self._accessed_collection:
             self._accessed_collection = True
-            
+
             # Ensure document-defined indexes are created
             if self._document._meta['indexes']:
                 for key_or_list in self._document._meta['indexes']:
@@ -251,7 +254,7 @@ class QuerySet(object):
             # If _types is being used (for polymorphism), it needs an index
             if '_types' in self._query:
                 self._collection.ensure_index('_types')
-            
+
             # Ensure all needed field indexes are created
             for field_name, field_instance in self._document._fields.iteritems():
                 if field_instance.__class__.__name__ == 'GeoLocationField':
@@ -264,7 +267,7 @@ class QuerySet(object):
             cursor_args = {}
             if self._loaded_fields:
                 cursor_args = {'fields': self._loaded_fields}
-            self._cursor_obj = self._collection.find(self._query, 
+            self._cursor_obj = self._collection.find(self._query,
                                                      **cursor_args)
             # Apply where clauses to cursor
             if self._where_clause:
@@ -374,8 +377,8 @@ class QuerySet(object):
                                               % self._document._class_name)
 
     def get_or_create(self, *q_objs, **query):
-        """Retrieve unique object or create, if it doesn't exist. Returns a tuple of 
-        ``(object, created)``, where ``object`` is the retrieved or created object 
+        """Retrieve unique object or create, if it doesn't exist. Returns a tuple of
+        ``(object, created)``, where ``object`` is the retrieved or created object
         and ``created`` is a boolean specifying whether a new object was created. Raises
         :class:`~mongoengine.queryset.MultipleObjectsReturned` or
         `DocumentName.MultipleObjectsReturned` if multiple results are found.
@@ -426,7 +429,7 @@ class QuerySet(object):
 
     def in_bulk(self, object_ids):
         """Retrieve a set of documents by their ids.
-        
+
         :param object_ids: a list or tuple of ``ObjectId``\ s
         :rtype: dict of ObjectIds as keys and collection-specific
                 Document subclasses as values.
@@ -438,7 +441,7 @@ class QuerySet(object):
         docs = self._collection.find({'_id': {'$in': object_ids}})
         for doc in docs:
             doc_map[doc['_id']] = self._document._from_son(doc)
- 
+
         return doc_map
 
     def next(self):
@@ -579,7 +582,7 @@ class QuerySet(object):
                 self._skip, self._limit = key.start, key.stop
             except IndexError, err:
                 # PyMongo raises an error if key.start == key.stop, catch it,
-                # bin it, kill it. 
+                # bin it, kill it.
                 start = key.start or 0
                 if start >= 0 and key.stop >= 0 and key.step is None:
                     if start == key.stop:
@@ -595,9 +598,9 @@ class QuerySet(object):
 
     def only(self, *fields):
         """Load only a subset of this document's fields. ::
-        
+
             post = BlogPost.objects(...).only("title")
-        
+
         :param fields: fields to include
 
         .. versionadded:: 0.3
@@ -719,7 +722,7 @@ class QuerySet(object):
 
         update = QuerySet._transform_update(self._document, **update)
         try:
-            self._collection.update(self._query, update, safe=safe_update, 
+            self._collection.update(self._query, update, safe=safe_update,
                                     upsert=upsert, multi=True)
         except pymongo.errors.OperationFailure, err:
             if unicode(err) == u'multi not coded yet':
@@ -740,7 +743,7 @@ class QuerySet(object):
             # Explicitly provide 'multi=False' to newer versions of PyMongo
             # as the default may change to 'True'
             if pymongo.version >= '1.1.1':
-                self._collection.update(self._query, update, safe=safe_update, 
+                self._collection.update(self._query, update, safe=safe_update,
                                         upsert=upsert, multi=False)
             else:
                 # Older versions of PyMongo don't support 'multi'
@@ -752,8 +755,8 @@ class QuerySet(object):
         return self
 
     def _sub_js_fields(self, code):
-        """When fields are specified with [~fieldname] syntax, where 
-        *fieldname* is the Python name of a field, *fieldname* will be 
+        """When fields are specified with [~fieldname] syntax, where
+        *fieldname* is the Python name of a field, *fieldname* will be
         substituted for the MongoDB name of the field (specified using the
         :attr:`name` keyword argument in a field's constructor).
         """
@@ -776,9 +779,9 @@ class QuerySet(object):
         options specified as keyword arguments.
 
         As fields in MongoEngine may use different names in the database (set
-        using the :attr:`db_field` keyword argument to a :class:`Field` 
+        using the :attr:`db_field` keyword argument to a :class:`Field`
         constructor), a mechanism exists for replacing MongoEngine field names
-        with the database field names in Javascript code. When accessing a 
+        with the database field names in Javascript code. When accessing a
         field, use square-bracket notation, and prefix the MongoEngine field
         name with a tilde (~).
 
